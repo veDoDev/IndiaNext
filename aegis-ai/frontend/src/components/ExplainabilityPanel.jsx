@@ -37,9 +37,23 @@ const HighlightedText = ({ text, flaggedPhrases }) => {
   return <>{segments}</>;
 };
 
+// Analysis breakdown bar (for phishing ML details)
+const BreakdownBar = ({ label, value, max, color }) => (
+  <div style={{ marginBottom: '8px' }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', fontFamily: 'JetBrains Mono, monospace', color: 'var(--muted)', marginBottom: '4px' }}>
+      <span>{label}</span>
+      <span style={{ color }}>{value}</span>
+    </div>
+    <div style={{ height: '4px', background: 'var(--bg)', borderRadius: '2px', overflow: 'hidden' }}>
+      <div style={{ height: '100%', width: `${Math.min((value / max) * 100, 100)}%`, background: color, borderRadius: '2px', transition: 'width 0.8s ease' }} />
+    </div>
+  </div>
+);
+
 const ExplainabilityPanel = ({ activeTab, result, inputAreaValue }) => {
   if (!result) return null;
 
+  // ── Behaviour Event Log ────────────────────────────────────
   if (activeTab === 'behaviour') {
     const { flagged_events } = result;
     if (!flagged_events || flagged_events.length === 0) return null;
@@ -63,29 +77,66 @@ const ExplainabilityPanel = ({ activeTab, result, inputAreaValue }) => {
     );
   }
 
-  const { flagged_phrases } = result;
-  if (!flagged_phrases || flagged_phrases.length === 0) return null;
+  // ── Phishing / Injection XAI ───────────────────────────────
+  const { flagged_phrases, explanation_summary, analysis_breakdown } = result;
+  const hasPhrases = flagged_phrases && flagged_phrases.length > 0;
+  const hasExplanation = explanation_summary;
+  const hasBreakdown = analysis_breakdown;
+
+  if (!hasPhrases && !hasExplanation) return null;
 
   return (
     <div className="panel" style={{ marginBottom: '24px' }}>
       <div className="section-label">EXPLAINABILITY — WHY FLAGGED</div>
-      <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', lineHeight: '2.2', background: 'var(--bg)', padding: '12px', border: '0.5px solid var(--border)', borderRadius: '6px', marginBottom: '12px' }}>
-        <HighlightedText text={inputAreaValue} flaggedPhrases={flagged_phrases} />
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {flagged_phrases.map((phrase, idx) => (
-          <div key={idx} style={{
-            background: 'var(--s2)', border: '0.5px solid var(--border)',
-            borderLeft: `2px solid ${phrase.level === 'red' ? 'var(--red)' : 'var(--amber)'}`,
-            borderRadius: '5px', padding: '8px 10px',
-          }}>
-            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text)', marginBottom: '4px' }}>
-              "<span style={{ color: 'var(--muted)' }}>{phrase.text}</span>"
-            </div>
-            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--muted)', lineHeight: '1.5' }}>{phrase.reason}</div>
+
+      {/* Highlighted text */}
+      {hasPhrases && (
+        <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', lineHeight: '2.2', background: 'var(--bg)', padding: '12px', border: '0.5px solid var(--border)', borderRadius: '6px', marginBottom: '12px' }}>
+          <HighlightedText text={inputAreaValue} flaggedPhrases={flagged_phrases} />
+        </div>
+      )}
+
+      {/* Explanation summary */}
+      {hasExplanation && (
+        <div style={{ background: 'rgba(139,92,246,0.06)', border: '0.5px solid rgba(139,92,246,0.2)', borderRadius: '6px', padding: '10px 12px', marginBottom: '12px' }}>
+          <div style={{ fontSize: '9px', color: 'var(--purple)', textTransform: 'uppercase', letterSpacing: '1.2px', fontFamily: 'JetBrains Mono, monospace', marginBottom: '6px' }}>
+            AI ANALYSIS SUMMARY
           </div>
-        ))}
-      </div>
+          <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', lineHeight: '1.7', color: 'var(--text)' }}>
+            {explanation_summary}
+          </div>
+        </div>
+      )}
+
+      {/* Analysis breakdown bars (phishing only) */}
+      {hasBreakdown && (
+        <div style={{ background: 'var(--s2)', border: '0.5px solid var(--border)', borderRadius: '6px', padding: '10px 12px', marginBottom: '12px' }}>
+          <div style={{ fontSize: '9px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '1.2px', fontFamily: 'JetBrains Mono, monospace', marginBottom: '10px' }}>
+            ANALYSIS BREAKDOWN
+          </div>
+          <BreakdownBar label="ML Model Probability" value={Math.round(analysis_breakdown.ml_probability * 100)} max={100} color="var(--cyan)" />
+          <BreakdownBar label="Scam Pattern Score" value={analysis_breakdown.pattern_score} max={60} color="var(--red)" />
+          <BreakdownBar label="NLP Feature Score" value={analysis_breakdown.nlp_score} max={40} color="var(--amber)" />
+        </div>
+      )}
+
+      {/* Per-phrase reasons */}
+      {hasPhrases && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {flagged_phrases.map((phrase, idx) => (
+            <div key={idx} style={{
+              background: 'var(--s2)', border: '0.5px solid var(--border)',
+              borderLeft: `2px solid ${phrase.level === 'red' ? 'var(--red)' : 'var(--amber)'}`,
+              borderRadius: '5px', padding: '8px 10px',
+            }}>
+              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text)', marginBottom: '4px' }}>
+                "<span style={{ color: 'var(--muted)' }}>{phrase.text}</span>"
+              </div>
+              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--muted)', lineHeight: '1.5' }}>{phrase.reason}</div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
