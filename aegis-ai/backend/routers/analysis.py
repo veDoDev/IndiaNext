@@ -4,21 +4,22 @@ from services.phishing_service import analyze_phishing_advanced
 from services.hf_service import analyze_injection
 from services.url_service import analyze_url
 from services.behaviour_service import analyze_behaviour
-from services.auto_detect import detect_input_type
-from pydantic import BaseModel
+from services.url_service import analyze_url
 
-router = APIRouter(prefix="/analyze")
+router = APIRouter(prefix="/analyze", tags=["Analysis"])
 
-class AutoAnalyzeRequest(BaseModel):
-    text: str
 
-@router.post("/phishing")
+@router.post("/phishing", response_model=AnalyzeTextResponse)
 def handle_phishing(request: AnalyzeTextRequest):
-    result = analyze_phishing_advanced(request.text)
-    return result
+    if not request.text.strip():
+        raise HTTPException(status_code=400, detail="Input text cannot be empty.")
+    return analyze_phishing(request.text)
+
 
 @router.post("/injection", response_model=AnalyzeTextResponse)
 def handle_injection(request: AnalyzeTextRequest):
+    if not request.text.strip():
+        raise HTTPException(status_code=400, detail="Input text cannot be empty.")
     return analyze_injection(request.text)
 
 @router.post("/url", response_model=AnalyzeTextResponse)
@@ -27,6 +28,8 @@ def handle_url(request: AnalyzeTextRequest):
 
 @router.post("/behaviour", response_model=AnalyzeBehaviourResponse)
 def handle_behaviour(request: AnalyzeBehaviourRequest):
+    if not request.events:
+        raise HTTPException(status_code=400, detail="Events list cannot be empty.")
     return analyze_behaviour(request.events)
 
 @router.post("/auto")

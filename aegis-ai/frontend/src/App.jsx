@@ -48,6 +48,9 @@ function Dashboard() {
         catch { throw new Error('Invalid JSON array provided for behaviour analysis.'); }
         res = await analyzeBehaviour(events);
       }
+      else if (activeTab === 'url') {
+        res = await analyzeUrl(inputVal);
+      }
       setResult(res);
     } catch (err) {
       setError(err.response?.data?.detail || err.message || 'Analysis failed. Is the backend running?');

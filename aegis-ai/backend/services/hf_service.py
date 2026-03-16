@@ -19,7 +19,7 @@ def get_severity_from_score(score: int) -> str:
     return "CRIT"
 
 def analyze_phishing(text: str) -> AnalyzeTextResponse:
-    API_URL = "https://router.huggingface.co/hf-inference/models/ealvaradob/bert-finetuned-phishing"
+    API_URL = "https://router.huggingface.co/hf-inference/models/ealvaradob/bert-finetuned-phishing" #not sure
     headers = {"Authorization": f"Bearer {HF_API_TOKEN}"} if HF_API_TOKEN else {}
     
     fallback_used = False
@@ -156,6 +156,5 @@ def analyze_injection(text: str) -> AnalyzeTextResponse:
         verdict=verdict,
         confidence=confidence,
         flagged_phrases=flagged,
-        recommended_action=action,
-        engine_source="HuggingFace Injection Model" if not fallback_used else "Local Rule Engine"
+        recommended_action=action
     )

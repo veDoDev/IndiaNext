@@ -4,7 +4,7 @@ const TABS = [
   { id: 'phishing', label: 'PHISHING', emoji: '🎣' },
   { id: 'injection', label: 'PROMPT INJECTION', emoji: '💉' },
   { id: 'behaviour', label: 'USER BEHAVIOUR', emoji: '👁' },
-  { id: 'url', label: 'MALICIOUS URL', emoji: '🔗' },
+  { id: 'url', label: 'MALICIOUS URL', emoji: '🔗', disabled: false },
 ];
 
 const Tabs = ({ activeTab, onTabSelect }) => {
