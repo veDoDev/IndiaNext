@@ -9,4 +9,3 @@ scipy
 nltk
 websockets
 httpx
-pickle5
