@@ -1,20 +1,23 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 from models.schemas import AnalyzeTextRequest, AnalyzeTextResponse, AnalyzeBehaviourRequest, AnalyzeBehaviourResponse
 from services.phishing_service import analyze_phishing_advanced
 from services.hf_service import analyze_injection
 from services.url_service import analyze_url
 from services.behaviour_service import analyze_behaviour
-from services.url_service import analyze_url
+from services.auto_detect import detect_input_type
 
 router = APIRouter(prefix="/analyze", tags=["Analysis"])
 
+class AutoAnalyzeRequest(BaseModel):
+    text: str
 
-@router.post("/phishing", response_model=AnalyzeTextResponse)
+@router.post("/phishing")
 def handle_phishing(request: AnalyzeTextRequest):
     if not request.text.strip():
         raise HTTPException(status_code=400, detail="Input text cannot be empty.")
-    return analyze_phishing(request.text)
-
+    result = analyze_phishing_advanced(request.text)
+    return result
 
 @router.post("/injection", response_model=AnalyzeTextResponse)
 def handle_injection(request: AnalyzeTextRequest):
@@ -57,7 +60,7 @@ def handle_auto(request: AutoAnalyzeRequest):
             events_data = json.loads(request.text)
             from models.schemas import BehaviourEvent
             events = [BehaviourEvent(**e) for e in events_data]
-            result = analyse_behaviour_behaviour(events)
+            result = analyze_behaviour(events)
             result_dict = result.dict() if hasattr(result, 'dict') else dict(result)
             result_dict['detected_as'] = 'behaviour'
             return result_dict
