@@ -21,8 +21,8 @@ except ImportError:
 def handle_phishing(request: AnalyzeTextRequest):
     if not request.text.strip():
         raise HTTPException(status_code=400, detail="Input text cannot be empty.")
-    result = analyze_phishing_advanced(request.text)
-    return result
+    return analyze_phishing(request.text)
+
 
 @router.post("/injection", response_model=AnalyzeTextResponse)
 def handle_injection(request: AnalyzeTextRequest):
