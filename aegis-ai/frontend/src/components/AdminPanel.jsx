@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 
 const API_URL = import.meta?.env?.VITE_API_URL || 'http://localhost:8000';
-const WS_URL = API_URL.replace('https://', 'wss://').replace('http://', 'ws://');
 
 const SEV_COLOR = { CRITICAL: '#ff3b5c', HIGH: '#ff3b5c', MEDIUM: '#ffab00', LOW: '#00c48c', CRIT: '#ff3b5c', MED: '#ffab00' };
 const SCORE_COLOR = s => s >= 75 ? '#ff3b5c' : s >= 50 ? '#ffab00' : s >= 25 ? '#00d4ff' : '#00c48c';
@@ -35,17 +34,28 @@ export default function AdminPanel() {
   const [scoreHistory, setScoreHistory] = useState([]);
   const [chartReady, setChartReady] = useState(false);
 
-  const wsRef = useRef(null);
   const lineChartRef = useRef(null);
   const lineChartInstance = useRef(null);
   const alertsEndRef = useRef(null);
+  const pollRef = useRef(null);
+  const prevScoreRef = useRef(0);
+  const alertIdsRef = useRef(new Set());
 
-  // Load Chart.js on mount
   useEffect(() => {
     loadChartJs(() => setChartReady(true));
   }, []);
 
-  // Build/update line chart
+  // Start polling on mount
+  useEffect(() => {
+    startPolling();
+    return () => stopPolling();
+  }, []);
+
+  useEffect(() => {
+    alertsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [alerts]);
+
+  // Update chart when score history changes
   useEffect(() => {
     if (!chartReady || !lineChartRef.current || scoreHistory.length === 0) return;
     const labels = scoreHistory.map((_, i) => `T+${i * 2}s`);
@@ -91,54 +101,118 @@ export default function AdminPanel() {
     });
   }, [scoreHistory, chartReady]);
 
-  useEffect(() => { connectWS(); return () => wsRef.current?.close(); }, []);
-  useEffect(() => { alertsEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [alerts]);
-
-  function connectWS() {
-    const ws = new WebSocket(`${WS_URL}/ws/alerts/demo`);
-    wsRef.current = ws;
-    ws.onopen = () => setConnected(true);
-    ws.onclose = () => { setConnected(false); setTimeout(connectWS, 3000); };
-    ws.onerror = () => setConnected(false);
-    ws.onmessage = e => { try { handleMessage(JSON.parse(e.data)); } catch {} };
-    const ping = setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.send('ping'); }, 25000);
-    ws.addEventListener('close', () => clearInterval(ping));
+  function startPolling() {
+    // Poll every 2 seconds
+    pollRef.current = setInterval(pollSession, 2000);
+    setConnected(true);
   }
 
-  function handleMessage(payload) {
-    if (payload.type === 'ALERT') {
-      const threatType = detectThreatType(payload.flagged_events || []);
-      setAlerts(prev => [{ ...payload, id: Date.now(), time: new Date().toLocaleTimeString(), threatType }, ...prev].slice(0, 50));
-    } else if (payload.type === 'SCORE_UPDATE') {
-      setSessions(prev => ({ ...prev, [payload.user_id]: payload }));
-      setScoreHistory(prev => [...prev.slice(-29), payload.threat_score || 0]);
-    } else if (payload.type === 'SIM_EVENT') {
-      setSimEvents(prev => [...prev, { ...payload, id: Date.now(), time: new Date().toLocaleTimeString() }].slice(-20));
-      setSessions(prev => ({
-        ...prev,
-        [payload.user_id]: { ...prev[payload.user_id], last_action: payload.action, user_id: payload.user_id, threat_score: prev[payload.user_id]?.threat_score || 0, severity: prev[payload.user_id]?.severity || 'LOW' }
-      }));
+  function stopPolling() {
+    if (pollRef.current) clearInterval(pollRef.current);
+    setConnected(false);
+  }
+
+  async function pollSession() {
+    try {
+      const res = await fetch(`${API_URL}/session/attacker_demo`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.error) return;
+
+      const score = data.threat_score || 0;
+      const severity = data.severity || 'LOW';
+      const verdict = data.verdict || 'NORMAL';
+      const confidence = data.confidence || 0.75;
+      const flaggedEvents = data.flagged_events || [];
+
+      // Update session state
+      setSessions({
+        attacker_demo: {
+          threat_score: score,
+          severity,
+          verdict,
+          confidence,
+          last_action: data.events?.[data.events.length - 1]?.action || '',
+          user_id: 'attacker_demo',
+        }
+      });
+
+      // Update score history
+      if (score > 0) {
+        setScoreHistory(prev => [...prev.slice(-29), score]);
+      }
+
+      // Fire alert if threshold crossed (score >= 75 and not already alerted)
+      const alertId = `${score}-${flaggedEvents.length}`;
+      if (score >= 75 && !alertIdsRef.current.has(alertId) && flaggedEvents.length > 0) {
+        alertIdsRef.current.add(alertId);
+        const threatType = detectThreatType(flaggedEvents);
+        setAlerts(prev => [{
+          id: Date.now(),
+          user_id: 'attacker_demo',
+          threat_score: score,
+          severity,
+          verdict,
+          confidence,
+          flagged_events: flaggedEvents,
+          threatType,
+          recommended_action: verdict === 'ANOMALY'
+            ? 'Immediately invalidate the active session. Block the originating IP. Require MFA re-authentication. Escalate to security team.'
+            : 'Monitor session closely.',
+          time: new Date().toLocaleTimeString(),
+        }, ...prev].slice(0, 50));
+      }
+
+      setConnected(true);
+    } catch {
+      setConnected(false);
     }
   }
 
   async function startSimulation() {
-    setSimRunning(true); setSimEvents([]); setAlerts([]); setSessions({});
-    setScoreHistory([]); setSimStatus('Streaming attack scenario...');
+    setSimRunning(true);
+    setSimEvents([]);
+    setAlerts([]);
+    setSessions({});
+    setScoreHistory([]);
+    alertIdsRef.current = new Set();
+    setSimStatus('Streaming attack scenario...');
     if (lineChartInstance.current) { lineChartInstance.current.destroy(); lineChartInstance.current = null; }
+
     try {
+      // Reset session first
+      await fetch(`${API_URL}/simulate/stop`, { method: 'POST' }).catch(() => {});
+      await new Promise(r => setTimeout(r, 500));
+
       const res = await fetch(`${API_URL}/simulate/attack`, { method: 'POST' });
       const data = await res.json();
+
       if (data.status === 'simulation started') {
         setSimStatus('Watch the threat meter climb...');
+        // Mirror the scenario events in the UI with delays
+        const scenario = data.scenario || [];
+        scenario.forEach(({ delay, action, ip }) => {
+          setTimeout(() => {
+            setSimEvents(prev => [...prev, {
+              id: Date.now() + delay,
+              time: new Date().toLocaleTimeString(),
+              action, ip,
+            }].slice(-20));
+          }, delay * 1000);
+        });
         setTimeout(() => { setSimRunning(false); setSimStatus('Simulation complete'); }, 35000);
       }
-    } catch { setSimStatus('Failed — is backend running?'); setSimRunning(false); }
+    } catch {
+      setSimStatus('Failed — is backend running?');
+      setSimRunning(false);
+    }
   }
 
   async function stopSimulation() {
     await fetch(`${API_URL}/simulate/stop`, { method: 'POST' }).catch(() => {});
     setSimRunning(false); setSimEvents([]); setSessions({}); setAlerts([]);
     setScoreHistory([]); setSimStatus('');
+    alertIdsRef.current = new Set();
     if (lineChartInstance.current) { lineChartInstance.current.destroy(); lineChartInstance.current = null; }
   }
 
@@ -165,11 +239,11 @@ export default function AdminPanel() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '10px', color: connected ? '#00c48c' : '#ff3b5c' }}>
           <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: connected ? '#00c48c' : '#ff3b5c', animation: connected ? 'pulse 2s infinite' : 'none' }} />
-          {connected ? 'DAEMON CONNECTED' : 'RECONNECTING...'}
+          {connected ? 'DAEMON CONNECTED' : 'CONNECTING...'}
         </div>
       </div>
 
-      {/* Stats row */}
+      {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '8px', marginBottom: '14px' }}>
         {[
           { label: 'ACTIVE SESSIONS', value: Object.keys(sessions).length, color: '#00d4ff' },
@@ -184,7 +258,7 @@ export default function AdminPanel() {
         ))}
       </div>
 
-      {/* Threat Score Timeline Chart */}
+      {/* Threat Score Timeline */}
       <div style={panel}>
         {secLbl('THREAT SCORE TIMELINE', '#ff3b5c')}
         {scoreHistory.length === 0 ? (
@@ -198,7 +272,7 @@ export default function AdminPanel() {
         )}
       </div>
 
-      {/* Confidence bar — shown when sessions active */}
+      {/* Session Threat Meters */}
       {Object.keys(sessions).length > 0 && (
         <div style={panel}>
           {secLbl('SESSION THREAT METERS')}
@@ -310,7 +384,6 @@ export default function AdminPanel() {
                   <span style={{ fontFamily: 'Syne, sans-serif', fontSize: '22px', fontWeight: 700, color: '#ff3b5c' }}>{alert.threat_score}</span>
                 </div>
 
-                {/* 4 metric cards including confidence */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '5px', marginBottom: '10px' }}>
                   {[
                     { label: 'USER', value: alert.user_id },
@@ -325,7 +398,6 @@ export default function AdminPanel() {
                   ))}
                 </div>
 
-                {/* Flagged events */}
                 {alert.flagged_events && alert.flagged_events.length > 0 && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px' }}>
                     {alert.flagged_events.slice(0, 4).map((ev, i) => (

@@ -19,7 +19,7 @@ const SAMPLE_BEHAVIOUR_JSON = JSON.stringify([
   { timestamp: "23:11:40", action: "User logged in successfully", ip: "203.0.113.45" },
   { timestamp: "23:12:05", action: "Started bulk data export (5000 records)", ip: "203.0.113.45" },
 ], null, 2);
-
+  
 function Dashboard() {
   const [activeTab, setActiveTab] = useState('phishing');
   const [inputVal, setInputVal] = useState('');
