@@ -43,6 +43,16 @@ def detect_input_type(text: str) -> str:
     except Exception:
         pass
 
+    # Check for URLs
+    # Simple regex to catch standalone URLs or text heavily dominated by URLs
+    url_pattern = re.compile(r'https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+|www\.[-\w.]+')
+    urls = url_pattern.findall(text)
+    if urls:
+        # If the input is primarily just a URL, route to URL analyzer
+        text_without_urls = url_pattern.sub('', text).strip()
+        if len(text_without_urls) < 20 or len(urls) > 0:
+            return 'url'
+
     # Score for injection
     injection_score = sum(1 for kw in INJECTION_KEYWORDS if kw.lower() in text_lower)
     

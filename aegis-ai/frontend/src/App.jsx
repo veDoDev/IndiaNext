@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import TopNav from './components/TopNav';
 import Tabs from './components/Tabs';
 import InputPanel from './components/InputPanel';
@@ -6,6 +7,7 @@ import VerdictCards from './components/VerdictCards';
 import ChartsPanel from './components/ChartsPanel';
 import ExplainabilityPanel from './components/ExplainabilityPanel';
 import RecommendationPanel from './components/RecommendationPanel';
+import LandingPage from './components/LandingPage';
 import { analyzePhishing, analyzeInjection, analyzeBehaviour, analyzeUrl } from './api';
 
 const SAMPLE_BEHAVIOUR_JSON = JSON.stringify([
@@ -17,12 +19,13 @@ const SAMPLE_BEHAVIOUR_JSON = JSON.stringify([
   { timestamp: "23:12:05", action: "Started bulk data export (5000 records)", ip: "203.0.113.45" },
 ], null, 2);
 
-function App() {
+function Dashboard() {
   const [activeTab, setActiveTab] = useState('phishing');
   const [inputVal, setInputVal] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
+  const navigate = useNavigate();
 
   const handleTabSelect = (tabId) => {
     setActiveTab(tabId);
@@ -38,6 +41,7 @@ function App() {
       let res;
       if (activeTab === 'phishing') res = await analyzePhishing(inputVal);
       else if (activeTab === 'injection') res = await analyzeInjection(inputVal);
+      else if (activeTab === 'url') res = await analyzeUrl(inputVal);
       else if (activeTab === 'behaviour') {
         let events;
         try { events = JSON.parse(inputVal); if (!Array.isArray(events)) throw new Error(); }
@@ -64,7 +68,24 @@ function App() {
         .result-anim { animation: fadeIn 0.4s ease-out; }
       `}</style>
       <div style={{ maxWidth: '760px', margin: '0 auto', padding: '0 16px 48px' }}>
-        <TopNav />
+        
+        {/* Navigation Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '24px', marginBottom: '24px' }}>
+             <TopNav />
+             <button 
+                 onClick={() => navigate('/')}
+                 style={{
+                     background: 'transparent', color: '#8892b0', border: '1px solid var(--border)', 
+                     padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontFamily: 'JetBrains Mono, monospace', fontSize: '11px',
+                     display: 'flex', alignItems: 'center', transition: 'all 0.2s'
+                 }}
+                 onMouseOver={(e) => { e.currentTarget.style.color = 'var(--cyan)'; e.currentTarget.style.borderColor = 'var(--cyan)'; }}
+                 onMouseOut={(e) => { e.currentTarget.style.color = '#8892b0'; e.currentTarget.style.borderColor = 'var(--border)'; }}
+             >
+                 [ EXIT TO CORE ]
+             </button>
+        </div>
+
         <Tabs activeTab={activeTab} onTabSelect={handleTabSelect} />
         <InputPanel
           activeTab={activeTab}
@@ -93,6 +114,17 @@ function App() {
         )}
       </div>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 
