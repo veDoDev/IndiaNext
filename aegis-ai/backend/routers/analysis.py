@@ -17,12 +17,12 @@ except ImportError:
     from services.hf_service import analyze_phishing
 
 
-@router.post("/phishing", response_model=AnalyzeTextResponse)
+@router.post("/phishing")
 def handle_phishing(request: AnalyzeTextRequest):
     if not request.text.strip():
         raise HTTPException(status_code=400, detail="Input text cannot be empty.")
-    return analyze_phishing(request.text)
-
+    result = analyze_phishing_advanced(request.text)
+    return result
 
 @router.post("/injection", response_model=AnalyzeTextResponse)
 def handle_injection(request: AnalyzeTextRequest):
