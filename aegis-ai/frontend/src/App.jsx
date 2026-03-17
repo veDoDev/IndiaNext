@@ -9,6 +9,7 @@ import ExplainabilityPanel from './components/ExplainabilityPanel';
 import RecommendationPanel from './components/RecommendationPanel';
 import LandingPage from './components/LandingPage';
 import { analyzePhishing, analyzeInjection, analyzeBehaviour, analyzeUrl } from './api';
+import AdminPanel from './components/AdminPanel';
 
 const SAMPLE_BEHAVIOUR_JSON = JSON.stringify([
   { timestamp: "21:45:10", action: "User logged in successfully", ip: "192.168.1.10" },

@@ -5,6 +5,7 @@ const TABS = [
   { id: 'injection', label: 'PROMPT INJECTION', emoji: '💉' },
   { id: 'behaviour', label: 'USER BEHAVIOUR', emoji: '👁' },
   { id: 'url', label: 'MALICIOUS URL', emoji: '🔗', disabled: false },
+  { id: 'admin', label: 'ADMIN MONITOR', emoji: '🛡' },
 ];
 
 const Tabs = ({ activeTab, onTabSelect }) => {
